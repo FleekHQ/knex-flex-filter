@@ -1,0 +1,30 @@
+{
+  "name": "knex-flex-filter-tests",
+  "version": "0.1.0",
+  "description": "knex-flex-filter test suite",
+  "repository": "https://github.com/Terminal-Systems/knex-flex-filter",
+  "author": "Daniel Merrill <daniel@terminal.co>",
+  "license": "MIT",
+  "private": false,
+  "devDependencies": {
+    "@babel/cli": "^7.1.2",
+    "@babel/core": "^7.1.2",
+    "@babel/node": "^7.0.0",
+    "@babel/plugin-proposal-object-rest-spread": "^7.3.1",
+    "@babel/plugin-transform-modules-commonjs": "^7.2.0",
+    "@babel/preset-env": "^7.1.0",
+    "babel-core": "^7.0.0-bridge.0",
+    "babel-jest": "^23.6.0",
+    "babel-polyfill": "^6.26.0",
+    "dotenv": "^6.2.0",
+    "eslint": "^5.6.1",
+    "eslint-config-airbnb-base": "^13.1.0",
+    "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-jest": "^21.25.0",
+    "jest": "^23.6.0",
+    "knex": "^0.16.3",
+    "knex-cleaner": "^1.1.4",
+    "pg": "^7.8.2",
+    "regenerator-runtime": "^0.13.1"
+  }
+}
