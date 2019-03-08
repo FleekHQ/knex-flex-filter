@@ -118,3 +118,17 @@ const opts = {
 knexFlexFilter(baseQuery, where, opts).then(result => console.log(result));
 // Will produce a query like whereRaw("myJsonbColumn->>'a' > ?")
 ```
+
+## Contributing
+
+Make sure all the tests pass before sending a PR. To run the test suite, run `yarn test`. Please note that the codebase is using `dotenv` package to connect to a test db, so, to connect to your own, add a `.env` file inside the `tests` folder with the following structure:
+
+```
+# knex-flex-filter/tests/.env
+DB_CLIENT=pg
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=
+DB_PASSWORD=
+DB_NAME=knex-flex-filter
+```
