@@ -139,6 +139,21 @@ describe('knex-flex-filter', () => {
   describe('when filtering using the jsonb preprocessor', () => {
     const BLOCK_NUMBER = 5000;
 
+    it('correctly filters by _eq', async (done) => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { lastBuyBlockNumber_eq: BLOCK_NUMBER },
+        { preprocessor: jsonbPreprocessor('data') },
+      );
+
+      expect(query._statements[0].value.sql).toEqual("data->>'lastBuyBlockNumber' = ?");
+      expect(query._statements[0].value.bindings).toEqual([BLOCK_NUMBER]);
+
+      const result = await query;
+      expect(parseInt(result[0].data.lastBuyBlockNumber, 10)).toEqual(BLOCK_NUMBER);
+      done();
+    });
+
     it('correctly filters by _gt', async (done) => {
       const query = knexFlexFilter(
         knex.table('entities'),
