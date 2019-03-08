@@ -1,3 +1,4 @@
+export const EQ = 'eq';
 export const GT = 'gt';
 export const LT = 'lt';
 export const IN = 'in';
@@ -7,6 +8,7 @@ export const LTE = 'lte';
 export const NOT_IN = 'not_in';
 
 export const filterArray = [
+  EQ,
   GT,
   LT,
   NOT_IN,
@@ -17,6 +19,7 @@ export const filterArray = [
 ];
 
 const conditionMap = {
+  [EQ]: '= ?',
   [GT]: '> ?',
   [LT]: '< ?',
   [NOT_IN]: '<> ANY(?)',
@@ -32,7 +35,16 @@ export const dbTypes = [
   'numeric',
   'float',
   'boolean',
-  'string',
+  'date',
+  'time',
+  'timestamp',
+  'timestampz',
+  'interval',
+  'double',
+  'char',
+  'varchar',
+  'text',
+  'uuid',
   '',
   // TODO @dmerrill6: fill out with other possible casts
 ];

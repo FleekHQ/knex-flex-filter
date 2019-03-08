@@ -21,7 +21,7 @@ yarn add knex-flex-filter
 ## Usage
 
 ```javascript
-import knexFlexFilter from 'knex-flex-filter' // Or const {knexFlexFilter} = require('knex-flex-filter)
+import knexFlexFilter from 'knex-flex-filter'; // Or const {knexFlexFilter} = require('knex-flex-filter)
 
 // baseQuery can be any Knex query
 const baseQuery = knex('my_entity');
@@ -31,15 +31,90 @@ const baseQuery = knex('my_entity');
 const where = {
   price_gt: 10,
   name_not_in: ['a', 'b'],
-}
+};
 
-const opts = {}
+const opts = {};
 
-knexFlexFilter(baseQuery, where, opts).then(result => console.log(result)) // Or even better if you use await!
+knexFlexFilter(baseQuery, where, opts).then(result => console.log(result));
+// Will produce a query like whereRaw('"price" > ?', [10]).whereRaw('"name" <> ANY(?)', [['a', 'b']])
+```
+
+## Available filters
+
+Current available filters are:
+
+```
+  <columnName>_eq: Equal
+  <columnName>_gt: Greater than
+  <columnName>_lt: Less than
+  <columnName>_in: In (Receives an array of values)
+  <columnName>_not: Not equal
+  <columnName>_gte: Greater than or equal
+  <columnName>_lte: Less than or equal
+  <columnName>_not_in: Not in (Receives an array of values)
 ```
 
 ## Options
 
-### Type casting
+### castFn
 
-### Preprocessing
+Used to cast the db data before comparing it.
+
+`castFn` receives the column name and returns the cast that should be applied to that column. If no cast is required, `castFn` must return `undefined`.
+
+For example, if you have column named `price`, but stored as a string in the db and want to cast it to integer for number comparison, you can do:
+
+```javascript
+...
+
+const opts = {
+  castFn = (column) => {
+    switch (column) {
+      case 'price':
+        return 'integer';
+      default:
+        return undefined;
+    };
+  };
+};
+
+knexFlexFilter(baseQuery, where, opts).then(result => console.log(result));
+```
+
+Available cast types are:
+
+```javascript
+'integer'
+'bigint'
+'numeric'
+'float'
+'boolean'
+'date'
+'time'
+'timestamp'
+'timestampz'
+'interval'
+'double'
+'char'
+'varchar'
+'text'
+'uuid'
+```
+
+### preprocessor
+
+Useful to transform the query before execution. `preprocessor` receives the name of the column and must return a sanitized raw query string.
+
+Knex Flex Filter currently provides `defaultPreprocessor()` and `jsonbPreprocessor(jsonbColumn)`. `defaultPreprocessor` is applied by default and just sanitizes the data. `jsonbPreprocessor` can be used to filter within `json` or `jsonb` stored data. The usage is the following:
+
+```javascript
+import { knexFlexFilter, jsonbPreprocessor } from 'knex-flex-filter';
+...
+
+const opts = {
+  preprocessor: jsonbPreprocessor('myJsonbColumn')
+};
+
+knexFlexFilter(baseQuery, where, opts).then(result => console.log(result));
+// Will produce a query like whereRaw("myJsonbColumn->>'a' > ?")
+```

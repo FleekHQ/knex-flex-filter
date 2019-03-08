@@ -8,10 +8,9 @@ require('./helpers/database');
 
 describe('knex-flex-filter', () => {
   let castFn;
-  let seeds;
 
   beforeEach(async (done) => {
-    seeds = await seedsFn(knex);
+    await seedsFn(knex);
     castFn = (arg) => {
       switch (arg) {
         case 'ownerId':
@@ -20,13 +19,24 @@ describe('knex-flex-filter', () => {
           return 'bigint';
 
         default:
-          return '';
+          return undefined;
       }
     };
     done();
   });
 
   describe('when filtering a normal column', () => {
+    it('correctly filters by _eq', async (done) => {
+      const query = knexFlexFilter(knex.table('entities'), { ownerId_eq: 1 }, { castFn });
+
+      expect(query._statements[0].value.sql).toEqual('("ownerId")::bigint = ?');
+      expect(query._statements[0].value.bindings).toEqual([1]);
+
+      const result = await query;
+      expect(parseInt(result[0].ownerId, 10)).toEqual(1);
+      done();
+    });
+
     it('correctly filters by _gt', async (done) => {
       const query = knexFlexFilter(knex.table('entities'), { ownerId_gt: 0 }, { castFn });
 
@@ -135,8 +145,6 @@ describe('knex-flex-filter', () => {
         { lastBuyBlockNumber_gt: BLOCK_NUMBER - 1 },
         { castFn, preprocessor: jsonbPreprocessor('data') },
       );
-
-      console.log(query);
 
       expect(query._statements[0].value.sql).toEqual("(data->>'lastBuyBlockNumber')::bigint > ?");
       expect(query._statements[0].value.bindings).toEqual([BLOCK_NUMBER - 1]);
