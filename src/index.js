@@ -55,30 +55,36 @@ export const defaultPreprocessor = () => filterKey => `"${sanitize(filterKey)}"`
 
 export const jsonbPreprocessor = jsonbColumn => filterKey => `${sanitize(jsonbColumn)}->>'${sanitize(filterKey)}'`;
 
-const processFilter = (filterQS, castFn, preprocessor) => {
+export const splitColumnAndCondition = (filterQS) => {
   // Search for the current filter
-  const filterCondition = filterArray.find(filter => filterQS.endsWith(filter));
+  const condition = filterArray.find(filter => filterQS.endsWith(filter));
 
-  if (!filterCondition) {
+  if (!condition) {
     throw Error(`Invalid filter '${filterQS}' supplied to query. Valid suffixes are ${JSON.stringify(filterArray)}`);
   }
 
-  // filterKey is going to be the actual column we are filtering on
-  const filterKey = filterQS.substring(0, filterQS.indexOf(filterCondition) - 1);
+  // column is going to be the actual column we are filtering on
+  const column = filterQS.substring(0, filterQS.indexOf(condition) - 1);
 
-  const preprocessed = preprocessor(filterKey);
+  return { column, condition };
+};
+
+const processFilter = (filterQS, castFn, preprocessor) => {
+  const { column, condition } = splitColumnAndCondition(filterQS);
+
+  const preprocessed = preprocessor(column);
   let query = preprocessed;
 
   // If there is a cast function, check if there is a cast available for the current filter
   if (castFn) {
-    const cast = castFn(filterKey);
+    const cast = castFn(column);
     if (!dbTypes.includes(cast)) {
       throw Error(`Invalid cast type '${cast}' supplied to query. Valid casts are ${dbTypes}`);
     }
     if (cast) query = `(${preprocessed})::${cast}`;
   }
 
-  return `${query} ${conditionMap[filterCondition]}`;
+  return `${query} ${conditionMap[condition]}`;
 };
 
 
