@@ -1,7 +1,7 @@
 
 import seedsFn from './helpers/seeds';
-import knexFlexFilter, { jsonbPreprocessor } from '../src';
 import knex from './knex';
+import knexFlexFilter, { jsonbPreprocessor } from '../src';
 
 require('./helpers/database');
 
@@ -101,6 +101,27 @@ describe('knex-flex-filter', () => {
 
       const result = await query;
       expect([2, 3]).not.toContain(parseInt(result[0].ownerId, 10));
+      done();
+    });
+
+    it('correctly filters by multiple filters at once', async (done) => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        {
+          ownerId_not_in: [1],
+          ownerId_gt: 2,
+        },
+        { castFn },
+      );
+
+      expect(query._statements[0].value.sql).toEqual('("ownerId")::bigint <> ANY(?)');
+      expect(query._statements[0].value.bindings).toEqual([[1]]);
+      expect(query._statements[1].value.sql).toEqual('("ownerId")::bigint > ?');
+      expect(query._statements[1].value.bindings).toEqual([2]);
+
+      const result = await query;
+      expect([1]).not.toContain(parseInt(result[0].ownerId, 10));
+      expect(parseInt(result[0].ownerId, 10)).toBeGreaterThan(2);
       done();
     });
   });
@@ -212,6 +233,27 @@ describe('knex-flex-filter', () => {
 
       const result = await query;
       expect([BLOCK_NUMBER + 1, BLOCK_NUMBER + 2]).not.toContain(parseInt(result[0].data.lastBuyBlockNumber, 10));
+      done();
+    });
+
+    it('correctly filters by multiple filters at once', async (done) => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        {
+          lastBuyBlockNumber_gt: BLOCK_NUMBER,
+          lastBuyBlockNumber_lt: BLOCK_NUMBER + 2,
+        },
+        { castFn, preprocessor: jsonbPreprocessor('data') },
+      );
+
+      expect(query._statements[0].value.sql).toEqual("(data->>'lastBuyBlockNumber')::bigint > ?");
+      expect(query._statements[0].value.bindings).toEqual([BLOCK_NUMBER]);
+      expect(query._statements[1].value.sql).toEqual("(data->>'lastBuyBlockNumber')::bigint < ?");
+      expect(query._statements[1].value.bindings).toEqual([BLOCK_NUMBER + 2]);
+
+      const result = await query;
+      expect(parseInt(result[0].data.lastBuyBlockNumber, 10)).toBeGreaterThan(BLOCK_NUMBER);
+      expect(parseInt(result[0].data.lastBuyBlockNumber, 10)).toBeLessThan(BLOCK_NUMBER + 2);
       done();
     });
   });

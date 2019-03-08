@@ -70,14 +70,13 @@ const processFilter = (filterQS, castFn, preprocessor) => {
 };
 
 
-const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
+export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
   const { castFn, preprocessor = defaultPreprocessor() } = opts;
 
   let result = originalQuery;
 
   Object.keys(where).forEach((key) => {
     const query = processFilter(key, castFn, preprocessor);
-    console.log(query, [where[key]]);
     result = result.whereRaw(query, [where[key]]);
   });
 
