@@ -17,3 +17,6 @@ yarn-error.log
 
 # compiled/distributable files
 dist/
+
+# Local setup
+.env
