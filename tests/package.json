@@ -1,6 +1,6 @@
 {
   "name": "knex-flex-filter-tests",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "knex-flex-filter test suite",
   "repository": "https://github.com/Terminal-Systems/knex-flex-filter",
   "author": "Daniel Merrill <daniel@terminal.co>",

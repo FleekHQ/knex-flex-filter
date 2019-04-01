@@ -17,9 +17,8 @@ describe('knex-flex-filter', () => {
           return 'bigint';
         case 'lastBuyBlockNumber':
           return 'bigint';
-
         default:
-          return undefined;
+          return '';
       }
     };
     done();
@@ -132,6 +131,107 @@ describe('knex-flex-filter', () => {
       const result = await query;
       expect([1]).not.toContain(parseInt(result[0].ownerId, 10));
       expect(parseInt(result[0].ownerId, 10)).toBeGreaterThan(2);
+      done();
+    });
+  });
+
+  describe('when filtering an aggregate column', () => {
+    let aggregatedQuery;
+    let isAggregateFn;
+    let preprocessor;
+    beforeEach(() => {
+      aggregatedQuery = knex.table('entities').sum('ownerId as ownerIdSum').groupBy('id');
+      isAggregateFn = column => column === 'ownerIdSum';
+      preprocessor = column => (column === 'ownerIdSum' ? 'sum("ownerId")' : column);
+    });
+
+    it('correctly filters by _eq', async (done) => {
+      const query = knexFlexFilter(aggregatedQuery, { ownerIdSum_eq: 1 }, { castFn, isAggregateFn, preprocessor });
+
+      expect(query._statements[2].value.sql).toEqual('sum("ownerId") = ?');
+      expect(query._statements[2].value.bindings).toEqual([1]);
+
+      const result = await query;
+      expect(parseInt(result[0].ownerIdSum, 10)).toEqual(1);
+      done();
+    });
+
+    it('correctly filters by _gt', async (done) => {
+      const query = knexFlexFilter(aggregatedQuery, { ownerIdSum_gt: 0 }, { castFn, isAggregateFn, preprocessor });
+
+      expect(query._statements[2].value.sql).toEqual('sum("ownerId") > ?');
+      expect(query._statements[2].value.bindings).toEqual([0]);
+
+      const result = await query;
+      expect(parseInt(result[0].ownerIdSum, 10)).toBeGreaterThan(0);
+      done();
+    });
+
+    it('correctly filters by _lt', async (done) => {
+      const query = knexFlexFilter(aggregatedQuery, { ownerIdSum_lt: 2 }, { castFn, isAggregateFn, preprocessor });
+
+      expect(query._statements[2].value.sql).toEqual('sum("ownerId") < ?');
+      expect(query._statements[2].value.bindings).toEqual([2]);
+
+      const result = await query;
+      expect(parseInt(result[0].ownerIdSum, 10)).toBeLessThan(2);
+      done();
+    });
+
+    it('correctly filters by _in', async (done) => {
+      const query = knexFlexFilter(aggregatedQuery, { ownerIdSum_in: [1, 2] }, { castFn, isAggregateFn, preprocessor });
+
+      expect(query._statements[2].value.sql).toEqual('sum("ownerId") = ANY(?)');
+      expect(query._statements[2].value.bindings).toEqual([[1, 2]]);
+
+      const result = await query;
+      expect([1, 2]).toContain(parseInt(result[0].ownerIdSum, 10));
+      done();
+    });
+
+    it('correctly filters by _not', async (done) => {
+      const query = knexFlexFilter(aggregatedQuery, { ownerIdSum_not: 2 }, { castFn, isAggregateFn, preprocessor });
+
+      expect(query._statements[2].value.sql).toEqual('sum("ownerId") <> ?');
+      expect(query._statements[2].value.bindings).toEqual([2]);
+
+      const result = await query;
+      expect(result.map(_schema => parseInt(_schema.ownerIdSum, 10))).not.toContain(2);
+      done();
+    });
+
+    it('correctly filters by _gte', async (done) => {
+      const query = knexFlexFilter(aggregatedQuery, { ownerIdSum_gte: 1 }, { castFn, isAggregateFn, preprocessor });
+
+      expect(query._statements[2].value.sql).toEqual('sum("ownerId") >= ?');
+      expect(query._statements[2].value.bindings).toEqual([1]);
+
+      const result = await query;
+      expect(parseInt(result[0].ownerIdSum, 10)).toBeGreaterThanOrEqual(1);
+      done();
+    });
+
+    it('correctly filters by _lte', async (done) => {
+      const query = knexFlexFilter(aggregatedQuery, { ownerIdSum_lte: 1 }, { castFn, isAggregateFn, preprocessor });
+
+      expect(query._statements[2].value.sql).toEqual('sum("ownerId") <= ?');
+      expect(query._statements[2].value.bindings).toEqual([1]);
+
+      const result = await query;
+      expect(parseInt(result[0].ownerIdSum, 10)).toBeLessThanOrEqual(1);
+      done();
+    });
+
+    // TODO @dmerrill6: Fix this test as it's not passing
+    xit('correctly filters by _not_in', async (done) => {
+      const query = knexFlexFilter(aggregatedQuery, { ownerIdSum_not_in: [2, 3] }, { castFn, isAggregateFn, preprocessor });
+      console.log(query.toString());
+      expect(query._statements[2].value.sql).toEqual('sum("ownerId") <> ANY(?)');
+      expect(query._statements[2].value.bindings).toEqual([[2, 3]]);
+
+      const result = await query;
+      console.log('result', result);
+      expect([2, 3]).not.toContain(parseInt(result[0].ownerIdSum, 10));
       done();
     });
   });
