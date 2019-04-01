@@ -119,6 +119,24 @@ knexFlexFilter(baseQuery, where, opts).then(result => console.log(result));
 // Will produce a query like whereRaw("myJsonbColumn->>'a' > ?")
 ```
 
+### isAggregateFn
+
+Use this function when trying to filter over a query that has an aggregate function (sum, count, etc.). It receives the column name and must return true if it's an aggregate column and false otherwise. Must be used together with `preprocessor`, as aggregate functions are filtered using `having`, which takes the operation instead of the alias.
+
+For example:
+
+```javascript
+const baseQuery = knex.table('entities').sum('ownerId as ownerIdSum').groupBy('id');
+const isAggregateFn = column => column === 'ownerIdSum';
+const preprocessor = column => (column === 'ownerIdSum' ? 'sum("ownerId")' : column);
+
+const query = knexFlexFilter(
+  aggregatedQuery,
+  { ownerIdSum_eq: 1 },
+  { castFn, isAggregateFn, preprocessor }
+);
+```
+
 ## Contributing
 
 Make sure all the tests pass before sending a PR. To run the test suite, run `yarn test`. Please note that the codebase is using `dotenv` package to connect to a test db, so, to connect to your own, add a `.env` file inside the `tests` folder with the following structure:

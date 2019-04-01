@@ -89,13 +89,20 @@ const processFilter = (filterQS, castFn, preprocessor) => {
 
 
 export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
-  const { castFn, preprocessor = defaultPreprocessor() } = opts;
+  const { castFn, preprocessor = defaultPreprocessor(), isAggregateFn } = opts;
 
   let result = originalQuery;
 
   Object.keys(where).forEach((key) => {
     const query = processFilter(key, castFn, preprocessor);
-    result = result.whereRaw(query, [where[key]]);
+    const { column } = splitColumnAndCondition(key);
+    let queryFn = 'whereRaw';
+    if (isAggregateFn) {
+      if (isAggregateFn(column)) {
+        queryFn = 'havingRaw';
+      }
+    }
+    result = result[queryFn](query, [where[key]]);
   });
 
   return result;
