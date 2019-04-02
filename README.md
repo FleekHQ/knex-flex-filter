@@ -161,6 +161,10 @@ const query = knexFlexFilter(
 );
 ```
 
+### caseInsensitiveSearch
+
+Set to `true` if you want to use insensitive-case searches when using `contains` or `starts_with` filters. Defaults to false.
+
 ## Contributing
 
 Make sure all the tests pass before sending a PR. To run the test suite, run `yarn test`. Please note that the codebase is using `dotenv` package to connect to a test db, so, to connect to your own, add a `.env` file inside the `tests` folder with the following structure:
