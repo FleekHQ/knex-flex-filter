@@ -113,6 +113,86 @@ describe('knex-flex-filter', () => {
       done();
     });
 
+    it('correctly filters by contains', async (done) => {
+      const query = knexFlexFilter(knex.table('entities'), { name_contains: 'rick' }, { castFn });
+
+      expect(query._statements[0].value.sql).toEqual('to_tsvector("name") @@ to_tsquery(?)');
+      expect(query._statements[0].value.bindings).toEqual(['rick']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toContain('Rick');
+      done();
+    });
+
+    it('correctly filters by not contains', async (done) => {
+      const query = knexFlexFilter(knex.table('entities'), { name_not_contains: 'rick' }, { castFn });
+
+      expect(query._statements[0].value.sql).toEqual('to_tsvector("name") @@ to_tsquery(?)');
+      expect(query._statements[0].value.bindings).toEqual(['!rick']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(2);
+      expect(result.map(r => r.name).sort()).toEqual(['John Doe', 'Peter Jackson'].sort());
+      done();
+    });
+
+    it('correctly filters by starts with', async (done) => {
+      const query = knexFlexFilter(knex.table('entities'), { name_starts_with: 'John' }, { castFn });
+
+      expect(query._statements[0].value.sql).toEqual('"name" LIKE ?');
+      expect(query._statements[0].value.bindings).toEqual(['John%']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toMatch(/^John/);
+      done();
+    });
+
+    it('correctly filters by not starts with', async (done) => {
+      const query = knexFlexFilter(knex.table('entities'), { name_not_starts_with: 'John' }, { castFn });
+
+      expect(query._statements[0].value.sql).toEqual('"name" NOT LIKE ?');
+      expect(query._statements[0].value.bindings).toEqual(['John%']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(2);
+      expect(result[0].name).not.toMatch(/^John/);
+      expect(result[1].name).not.toMatch(/^John/);
+      done();
+    });
+
+    it('correctly filters by ends with', async (done) => {
+      const query = knexFlexFilter(knex.table('entities'), { name_ends_with: 'Doe' }, { castFn });
+
+      expect(query._statements[0].value.sql).toEqual('"name" LIKE ?');
+      expect(query._statements[0].value.bindings).toEqual(['%Doe']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toMatch(/Doe$/);
+      done();
+    });
+
+    it('correctly filters by not ends with', async (done) => {
+      const query = knexFlexFilter(knex.table('entities'), { name_not_ends_with: 'Doe' }, { castFn });
+
+      expect(query._statements[0].value.sql).toEqual('"name" NOT LIKE ?');
+      expect(query._statements[0].value.bindings).toEqual(['%Doe']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(2);
+      expect(result[0].name).not.toMatch(/Doe$/);
+      expect(result[1].name).not.toMatch(/Doe$/);
+      done();
+    });
+
     it('correctly filters by multiple filters at once', async (done) => {
       const query = knexFlexFilter(
         knex.table('entities'),
@@ -356,6 +436,110 @@ describe('knex-flex-filter', () => {
 
       const result = await query;
       expect([BLOCK_NUMBER + 1, BLOCK_NUMBER + 2]).not.toContain(parseInt(result[0].data.lastBuyBlockNumber, 10));
+      done();
+    });
+
+    it('correctly filters by contains', async (done) => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { name_contains: 'rick' },
+        { castFn, preprocessor: jsonbPreprocessor('data') },
+      );
+
+      expect(query._statements[0].value.sql).toEqual("to_tsvector(data->>'name') @@ to_tsquery(?)");
+      expect(query._statements[0].value.bindings).toEqual(['rick']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(1);
+      expect(result[0].data.name).toContain('Rick');
+      done();
+    });
+
+    it('correctly filters by not contains', async (done) => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { name_not_contains: 'rick' },
+        { castFn, preprocessor: jsonbPreprocessor('data') },
+      );
+
+      expect(query._statements[0].value.sql).toEqual("to_tsvector(data->>'name') @@ to_tsquery(?)");
+      expect(query._statements[0].value.bindings).toEqual(['!rick']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(2);
+      expect(result.map(r => r.data.name).sort()).toEqual(['John Doe', 'Peter Jackson'].sort());
+      done();
+    });
+
+    it('correctly filters by starts with', async (done) => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { name_starts_with: 'John' },
+        { castFn, preprocessor: jsonbPreprocessor('data') },
+      );
+
+      expect(query._statements[0].value.sql).toEqual("data->>'name' LIKE ?");
+      expect(query._statements[0].value.bindings).toEqual(['John%']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(1);
+      expect(result[0].data.name).toMatch(/^John/);
+      done();
+    });
+
+    it('correctly filters by not starts with', async (done) => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { name_not_starts_with: 'John' },
+        { castFn, preprocessor: jsonbPreprocessor('data') },
+      );
+
+      expect(query._statements[0].value.sql).toEqual("data->>'name' NOT LIKE ?");
+      expect(query._statements[0].value.bindings).toEqual(['John%']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(2);
+      expect(result[0].data.name).not.toMatch(/^John/);
+      expect(result[1].data.name).not.toMatch(/^John/);
+      done();
+    });
+
+    it('correctly filters by ends with', async (done) => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { name_ends_with: 'Doe' },
+        { castFn, preprocessor: jsonbPreprocessor('data') },
+      );
+
+      expect(query._statements[0].value.sql).toEqual("data->>'name' LIKE ?");
+      expect(query._statements[0].value.bindings).toEqual(['%Doe']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(1);
+      expect(result[0].data.name).toMatch(/Doe$/);
+      done();
+    });
+
+    it('correctly filters by not ends with', async (done) => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { name_not_ends_with: 'Doe' },
+        { castFn, preprocessor: jsonbPreprocessor('data') },
+      );
+
+      expect(query._statements[0].value.sql).toEqual("data->>'name' NOT LIKE ?");
+      expect(query._statements[0].value.bindings).toEqual(['%Doe']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(2);
+      expect(result[0].data.name).not.toMatch(/Doe$/);
+      expect(result[1].data.name).not.toMatch(/Doe$/);
       done();
     });
 

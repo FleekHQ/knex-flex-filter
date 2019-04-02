@@ -6,6 +6,12 @@ export const NOT = 'not';
 export const GTE = 'gte';
 export const LTE = 'lte';
 export const NOT_IN = 'not_in';
+export const CONTAINS = 'contains';
+export const NOT_CONTAINS = 'not_contains';
+export const STARTS_WITH = 'starts_with';
+export const NOT_STARTS_WITH = 'not_starts_with';
+export const ENDS_WITH = 'ends_with';
+export const NOT_ENDS_WITH = 'not_ends_with';
 
 export const filterArray = [
   EQ,
@@ -13,6 +19,12 @@ export const filterArray = [
   LT,
   NOT_IN,
   IN,
+  NOT_CONTAINS,
+  CONTAINS,
+  NOT_STARTS_WITH,
+  STARTS_WITH,
+  NOT_ENDS_WITH,
+  ENDS_WITH,
   NOT,
   GTE,
   LTE,
@@ -24,6 +36,12 @@ const conditionMap = {
   [LT]: '< ?',
   [NOT_IN]: '<> ANY(?)',
   [IN]: '= ANY(?)',
+  [NOT_CONTAINS]: "to_tsvector(??) @@ to_tsquery('!?')",
+  [CONTAINS]: "to_tsvector(??) @@ to_tsquery('?')",
+  [NOT_STARTS_WITH]: "NOT LIKE '?%'",
+  [STARTS_WITH]: "LIKE '?%'",
+  [NOT_ENDS_WITH]: "NOT LIKE '%?'",
+  [ENDS_WITH]: "LIKE '%?'",
   [NOT]: '<> ?',
   [GTE]: '>= ?',
   [LTE]: '<= ?',
@@ -84,7 +102,12 @@ const processFilter = (filterQS, castFn, preprocessor) => {
     if (cast) query = `(${preprocessed})::${cast}`;
   }
 
-  return `${query} ${conditionMap[condition]}`;
+  const currCondition = conditionMap[condition];
+  if (currCondition.includes('??')) {
+    return currCondition.replace('??', query);
+  }
+
+  return `${query} ${currCondition}`;
 };
 
 
@@ -94,15 +117,27 @@ export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
   let result = originalQuery;
 
   Object.keys(where).forEach((key) => {
-    const query = processFilter(key, castFn, preprocessor);
-    const { column } = splitColumnAndCondition(key);
+    let query = processFilter(key, castFn, preprocessor);
+    const { column, condition } = splitColumnAndCondition(key);
     let queryFn = 'whereRaw';
     if (isAggregateFn) {
       if (isAggregateFn(column)) {
         queryFn = 'havingRaw';
       }
     }
-    result = result[queryFn](query, [where[key]]);
+    let value = where[key];
+
+    // Escape apostrophes correctly
+    const matchEscape = conditionMap[condition].match(/'(.*)\?(.*)'/);
+    console.log('qv', query, '--', value, '---', conditionMap[condition]);
+    if (matchEscape) {
+      // eslint-disable-next-line no-unused-vars
+      const [_, pre, post] = matchEscape;
+      value = `${pre}${value}${post}`;
+      query = query.replace(/(.*)'.*\?.*'(.*)/, '$1?$2');
+    }
+
+    result = result[queryFn](query, [value]);
   });
 
   return result;
