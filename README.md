@@ -52,6 +52,26 @@ Current available filters are:
   <columnName>_gte: Greater than or equal
   <columnName>_lte: Less than or equal
   <columnName>_not_in: Not in (Receives an array of values)
+  <columnName>_contains: String contains (uses full-text-search)
+  <columnName>_not_contains: String not contains (uses full-text-search)
+  <columnName>_starts_with: String starts with
+  <columnName>_not_starts_with: String does not start with
+  <columnName>_ends_with: String ends with
+  <columnName>_not_ends_with: String does not end with
+```
+
+### Note
+
+Indexes can greatly increase the performance of filters. You should consider adding indexes for the filterable columns. A normal index should be enough, but for full-text-search filters you can add a GIN or GiST index like in the following example:
+
+```javascript
+exports.up = async (knex) => {
+  await knex.raw('CREATE INDEX posts_title_fts_index ON posts USING gin(tsvector(title))');
+};
+
+exports.down = async (knex) => {
+  await knex.raw('DROP INDEX posts_title_fts_index');
+};
 ```
 
 ## Options
