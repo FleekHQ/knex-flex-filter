@@ -12,6 +12,7 @@ export const STARTS_WITH = 'starts_with';
 export const NOT_STARTS_WITH = 'not_starts_with';
 export const ENDS_WITH = 'ends_with';
 export const NOT_ENDS_WITH = 'not_ends_with';
+export const SIMILAR_TO = 'similar_to';
 
 export const filterArray = [
   EQ,
@@ -25,6 +26,7 @@ export const filterArray = [
   STARTS_WITH,
   NOT_ENDS_WITH,
   ENDS_WITH,
+  SIMILAR_TO,
   NOT,
   GTE,
   LTE,
@@ -36,12 +38,13 @@ const conditionMap = {
   [LT]: '< ?',
   [NOT_IN]: '<> ANY(?)',
   [IN]: '= ANY(?)',
-  [NOT_CONTAINS]: "to_tsvector(??) @@ to_tsquery('!?')",
-  [CONTAINS]: "to_tsvector(??) @@ to_tsquery('?')",
+  [NOT_CONTAINS]: "NOT LIKE '%?%'",
+  [CONTAINS]: "LIKE '%?%'",
   [NOT_STARTS_WITH]: "NOT LIKE '?%'",
   [STARTS_WITH]: "LIKE '?%'",
   [NOT_ENDS_WITH]: "NOT LIKE '%?'",
   [ENDS_WITH]: "LIKE '%?'",
+  [SIMILAR_TO]: '% ?',
   [NOT]: '<> ?',
   [GTE]: '>= ?',
   [LTE]: '<= ?',
@@ -112,7 +115,9 @@ const processFilter = (filterQS, castFn, preprocessor) => {
 
 
 export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
-  const { castFn, preprocessor = defaultPreprocessor(), isAggregateFn } = opts;
+  const {
+    castFn, preprocessor = defaultPreprocessor(), isAggregateFn, caseInsensitiveSearch = false,
+  } = opts;
 
   let result = originalQuery;
 
@@ -134,6 +139,10 @@ export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
       const [_, pre, post] = matchEscape;
       value = `${pre}${value}${post}`;
       query = query.replace(/(.*)'.*\?.*'(.*)/, '$1?$2');
+    }
+
+    if (caseInsensitiveSearch) {
+      query = query.replace('LIKE', 'ILIKE');
     }
 
     result = result[queryFn](query, [value]);
