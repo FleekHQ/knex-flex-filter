@@ -114,23 +114,23 @@ describe('knex-flex-filter', () => {
     });
 
     it('correctly filters by contains', async (done) => {
-      const query = knexFlexFilter(knex.table('entities'), { name_contains: 'rick' }, { castFn });
+      const query = knexFlexFilter(knex.table('entities'), { name_contains: 'Ric' }, { castFn });
 
-      expect(query._statements[0].value.sql).toEqual('to_tsvector("name") @@ to_tsquery(?)');
-      expect(query._statements[0].value.bindings).toEqual(['rick']);
+      expect(query._statements[0].value.sql).toEqual('"name" LIKE ?');
+      expect(query._statements[0].value.bindings).toEqual(['%Ric%']);
 
       const result = await query;
 
       expect(result).toHaveLength(1);
-      expect(result[0].name).toContain('Rick');
+      expect(result[0].name).toContain('Ric');
       done();
     });
 
     it('correctly filters by not contains', async (done) => {
-      const query = knexFlexFilter(knex.table('entities'), { name_not_contains: 'rick' }, { castFn });
+      const query = knexFlexFilter(knex.table('entities'), { name_not_contains: 'Ric' }, { castFn });
 
-      expect(query._statements[0].value.sql).toEqual('to_tsvector("name") @@ to_tsquery(?)');
-      expect(query._statements[0].value.bindings).toEqual(['!rick']);
+      expect(query._statements[0].value.sql).toEqual('"name" NOT LIKE ?');
+      expect(query._statements[0].value.bindings).toEqual(['%Ric%']);
 
       const result = await query;
 
@@ -190,6 +190,36 @@ describe('knex-flex-filter', () => {
       expect(result).toHaveLength(2);
       expect(result[0].name).not.toMatch(/Doe$/);
       expect(result[1].name).not.toMatch(/Doe$/);
+      done();
+    });
+
+    it('correctly filters by similar_to', async (done) => {
+      const query = knexFlexFilter(
+        knex.table('entities'), { name_similar_to: 'jon doe' }, { castFn, caseInsensitiveSearch: true },
+      );
+
+      expect(query._statements[0].value.sql).toEqual('"name" % ?');
+      expect(query._statements[0].value.bindings).toEqual(['jon doe']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toEqual('John Doe');
+      done();
+    });
+
+    it('correctly filters by contains using case-insensitive search', async (done) => {
+      const query = knexFlexFilter(
+        knex.table('entities'), { name_contains: 'ric' }, { castFn, caseInsensitiveSearch: true },
+      );
+
+      expect(query._statements[0].value.sql).toEqual('"name" ILIKE ?');
+      expect(query._statements[0].value.bindings).toEqual(['%ric%']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toContain('Ric');
       done();
     });
 
@@ -442,29 +472,29 @@ describe('knex-flex-filter', () => {
     it('correctly filters by contains', async (done) => {
       const query = knexFlexFilter(
         knex.table('entities'),
-        { name_contains: 'rick' },
+        { name_contains: 'Ric' },
         { castFn, preprocessor: jsonbPreprocessor('data') },
       );
 
-      expect(query._statements[0].value.sql).toEqual("to_tsvector(data->>'name') @@ to_tsquery(?)");
-      expect(query._statements[0].value.bindings).toEqual(['rick']);
+      expect(query._statements[0].value.sql).toEqual("data->>'name' LIKE ?");
+      expect(query._statements[0].value.bindings).toEqual(['%Ric%']);
 
       const result = await query;
 
       expect(result).toHaveLength(1);
-      expect(result[0].data.name).toContain('Rick');
+      expect(result[0].data.name).toContain('Ric');
       done();
     });
 
     it('correctly filters by not contains', async (done) => {
       const query = knexFlexFilter(
         knex.table('entities'),
-        { name_not_contains: 'rick' },
+        { name_not_contains: 'Ric' },
         { castFn, preprocessor: jsonbPreprocessor('data') },
       );
 
-      expect(query._statements[0].value.sql).toEqual("to_tsvector(data->>'name') @@ to_tsquery(?)");
-      expect(query._statements[0].value.bindings).toEqual(['!rick']);
+      expect(query._statements[0].value.sql).toEqual("data->>'name' NOT LIKE ?");
+      expect(query._statements[0].value.bindings).toEqual(['%Ric%']);
 
       const result = await query;
 
@@ -540,6 +570,42 @@ describe('knex-flex-filter', () => {
       expect(result).toHaveLength(2);
       expect(result[0].data.name).not.toMatch(/Doe$/);
       expect(result[1].data.name).not.toMatch(/Doe$/);
+      done();
+    });
+
+    it('correctly filters by similar_to', async (done) => {
+      const newCastFn = () => 'text';
+
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { name_similar_to: 'jon doe' },
+        { castFn: newCastFn, preprocessor: jsonbPreprocessor('data') },
+      );
+
+      expect(query._statements[0].value.sql).toEqual("(data->>'name')::text % ?");
+      expect(query._statements[0].value.bindings).toEqual(['jon doe']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(1);
+      expect(result[0].data.name).toEqual('John Doe');
+      done();
+    });
+
+    it('correctly filters by contains using case-insensitive search', async (done) => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { name_contains: 'ric' },
+        { castFn, preprocessor: jsonbPreprocessor('data'), caseInsensitiveSearch: true },
+      );
+
+      expect(query._statements[0].value.sql).toEqual("data->>'name' ILIKE ?");
+      expect(query._statements[0].value.bindings).toEqual(['%ric%']);
+
+      const result = await query;
+
+      expect(result).toHaveLength(1);
+      expect(result[0].data.name).toContain('Ric');
       done();
     });
 

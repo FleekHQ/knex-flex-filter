@@ -52,26 +52,30 @@ Current available filters are:
   <columnName>_gte: Greater than or equal
   <columnName>_lte: Less than or equal
   <columnName>_not_in: Not in (Receives an array of values)
-  <columnName>_contains: String contains (uses full-text-search)
-  <columnName>_not_contains: String not contains (uses full-text-search)
+  <columnName>_contains: String contains
+  <columnName>_not_contains: String not contains
   <columnName>_starts_with: String starts with
   <columnName>_not_starts_with: String does not start with
   <columnName>_ends_with: String ends with
   <columnName>_not_ends_with: String does not end with
+  <columnName>_similar_to: String is similar to
 ```
 
 ### Note
 
-Indexes can greatly increase the performance of filters. You should consider adding indexes for the filterable columns. A normal index should be enough, but for full-text-search filters you can add a GIN or GiST index like in the following example:
+`similar_to` filter requires Postgres `pg_trgm` extension. A migration that creates the extension and creates a GIN index for faster "similar to" queries can look like this:
 
 ```javascript
 exports.up = async (knex) => {
-  await knex.raw('CREATE INDEX posts_title_fts_index ON posts USING gin(tsvector(title))');
+  await knex.raw('CREATE EXTENSION pg_trgm');
+  await knex.raw('CREATE INDEX posts_title_trgm_index ON posts USING gin(title gin_trgm_ops)');
 };
 
 exports.down = async (knex) => {
-  await knex.raw('DROP INDEX posts_title_fts_index');
+  await knex.raw('DROP EXTENSION pg_trgm');
+  await knex.raw('DROP INDEX posts_title_trgm_index');
 };
+
 ```
 
 ## Options
@@ -156,6 +160,10 @@ const query = knexFlexFilter(
   { castFn, isAggregateFn, preprocessor }
 );
 ```
+
+### caseInsensitiveSearch
+
+Set to `true` if you want to use insensitive-case searches when using `contains` or `starts_with` filters. Defaults to false.
 
 ## Contributing
 
