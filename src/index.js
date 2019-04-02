@@ -129,7 +129,6 @@ export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
 
     // Escape apostrophes correctly
     const matchEscape = conditionMap[condition].match(/'(.*)\?(.*)'/);
-    console.log('qv', query, '--', value, '---', conditionMap[condition]);
     if (matchEscape) {
       // eslint-disable-next-line no-unused-vars
       const [_, pre, post] = matchEscape;
