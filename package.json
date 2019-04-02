@@ -1,6 +1,6 @@
 {
   "name": "knex-flex-filter",
-  "version": "0.2.1",
+  "version": "0.3.0-alpha",
   "description": "Flexible filtering and search for Knex queries",
   "main": "dist/index.js",
   "repository": "https://github.com/Terminal-Systems/knex-flex-filter",
