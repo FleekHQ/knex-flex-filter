@@ -72,6 +72,18 @@ export const dbTypes = [
 
 const sanitize = identifier => identifier.replace(/([^A-Za-z0-9_]+)/g, '');
 
+const getCondition = (conditionMapper, column, condition) => {
+  let currCondition = conditionMap[condition];
+  if (conditionMapper) {
+    const mappedCondition = conditionMapper(column, condition, currCondition);
+    if (mappedCondition) {
+      currCondition = mappedCondition;
+    }
+  }
+
+  return currCondition;
+};
+
 export const defaultPreprocessor = () => filterKey => `"${sanitize(filterKey)}"`;
 
 export const jsonbPreprocessor = jsonbColumn => filterKey => `${sanitize(jsonbColumn)}->>'${sanitize(filterKey)}'`;
@@ -105,13 +117,7 @@ const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
     if (cast) query = `(${preprocessed})::${cast}`;
   }
 
-  let currCondition = conditionMap[condition];
-  if (conditionMapper) {
-    const mappedCondition = conditionMapper(column, condition, currCondition);
-    if (mappedCondition) {
-      currCondition = mappedCondition;
-    }
-  }
+  let currCondition = getCondition(conditionMapper, column, condition);
   if (currCondition.includes('??')) {
     return currCondition.replace('??', query);
   }
@@ -139,7 +145,7 @@ export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
     let value = where[key];
 
     // Escape apostrophes correctly
-    const matchEscape = conditionMap[condition].match(/'(.*)\?(.*)'/);
+    const matchEscape = getCondition(conditionMapper, column, condition).match(/'(.*)\?(.*)'/);
     if (matchEscape) {
       // eslint-disable-next-line no-unused-vars
       const [_, pre, post] = matchEscape;
