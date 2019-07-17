@@ -165,6 +165,29 @@ const query = knexFlexFilter(
 
 Set to `true` if you want to use insensitive-case searches when using `contains` or `starts_with` filters. Defaults to false.
 
+### conditionMapper
+Useful to transform/change the default operator or condition that a 
+particular filter is being evaluated against. `conditionMapper` receives the column name, the condition being evaluated and the default/normal value that should returned for the condition.
+
+For example, here we change the `contains` condition to use json containment operator `@>`:
+
+```javascript
+import { knexFlexFilter, CONTAINS } from 'knex-flex-filter';
+...
+
+const opts = {
+  conditionMapper: (column, condition, defaultValue) => {
+    if (condition === CONTAINS) {
+      return '@> ?';
+    }
+
+    return defaultValue;
+  }
+}
+
+knexFlexFilter(baseQuery, where, opts).then(console.log);
+```
+
 ## Contributing
 
 Make sure all the tests pass before sending a PR. To run the test suite, run `yarn test`. Please note that the codebase is using `dotenv` package to connect to a test db, so, to connect to your own, add a `.env` file inside the `tests` folder with the following structure:

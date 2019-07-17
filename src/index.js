@@ -72,6 +72,18 @@ export const dbTypes = [
 
 const sanitize = identifier => identifier.replace(/([^A-Za-z0-9_]+)/g, '');
 
+const getCondition = (conditionMapper, column, condition) => {
+  let currCondition = conditionMap[condition];
+  if (conditionMapper) {
+    const mappedCondition = conditionMapper(column, condition, currCondition);
+    if (mappedCondition) {
+      currCondition = mappedCondition;
+    }
+  }
+
+  return currCondition;
+};
+
 export const defaultPreprocessor = () => filterKey => `"${sanitize(filterKey)}"`;
 
 export const jsonbPreprocessor = jsonbColumn => filterKey => `${sanitize(jsonbColumn)}->>'${sanitize(filterKey)}'`;
@@ -90,7 +102,7 @@ export const splitColumnAndCondition = (filterQS) => {
   return { column, condition };
 };
 
-const processFilter = (filterQS, castFn, preprocessor) => {
+const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
   const { column, condition } = splitColumnAndCondition(filterQS);
 
   const preprocessed = preprocessor(column);
@@ -105,7 +117,7 @@ const processFilter = (filterQS, castFn, preprocessor) => {
     if (cast) query = `(${preprocessed})::${cast}`;
   }
 
-  const currCondition = conditionMap[condition];
+  let currCondition = getCondition(conditionMapper, column, condition);
   if (currCondition.includes('??')) {
     return currCondition.replace('??', query);
   }
@@ -116,13 +128,13 @@ const processFilter = (filterQS, castFn, preprocessor) => {
 
 export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
   const {
-    castFn, preprocessor = defaultPreprocessor(), isAggregateFn, caseInsensitiveSearch = false,
+    castFn, preprocessor = defaultPreprocessor(), isAggregateFn, caseInsensitiveSearch = false, conditionMapper,
   } = opts;
 
   let result = originalQuery;
 
   Object.keys(where).forEach((key) => {
-    let query = processFilter(key, castFn, preprocessor);
+    let query = processFilter(key, castFn, preprocessor, conditionMapper);
     const { column, condition } = splitColumnAndCondition(key);
     let queryFn = 'whereRaw';
     if (isAggregateFn) {
@@ -133,7 +145,7 @@ export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
     let value = where[key];
 
     // Escape apostrophes correctly
-    const matchEscape = conditionMap[condition].match(/'(.*)\?(.*)'/);
+    const matchEscape = getCondition(conditionMapper, column, condition).match(/'(.*)\?(.*)'/);
     if (matchEscape) {
       // eslint-disable-next-line no-unused-vars
       const [_, pre, post] = matchEscape;
