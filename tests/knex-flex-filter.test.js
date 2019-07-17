@@ -7,7 +7,7 @@ require('./helpers/database');
 
 
 describe('knex-flex-filter', () => {
-  let  castFn;
+  let castFn;
 
   beforeEach(async (done) => {
     await seedsFn(knex);
