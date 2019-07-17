@@ -1,13 +1,13 @@
 
 import seedsFn from './helpers/seeds';
 import knex from './knex';
-import knexFlexFilter, { jsonbPreprocessor } from '../src';
+import knexFlexFilter, { jsonbPreprocessor, defaultPreprocessor, EQ } from '../src';
 
 require('./helpers/database');
 
 
 describe('knex-flex-filter', () => {
-  let castFn;
+  let  castFn;
 
   beforeEach(async (done) => {
     await seedsFn(knex);
@@ -628,6 +628,41 @@ describe('knex-flex-filter', () => {
       expect(parseInt(result[0].data.lastBuyBlockNumber, 10)).toBeGreaterThan(BLOCK_NUMBER);
       expect(parseInt(result[0].data.lastBuyBlockNumber, 10)).toBeLessThan(BLOCK_NUMBER + 2);
       done();
+    });
+  });
+
+  describe('when filtering using the condition mapper', () => {
+    const BLOCK_NUMBER = 5000;
+    it('should correctly use new condition operator @>', async () => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        {
+          lastBuyBlockNumber_eq: { lastBuyBlockNumber: BLOCK_NUMBER },
+        },
+        {
+          preprocessor: (column) => {
+            switch (column) {
+              case 'lastBuyBlockNumber':
+                return 'data'; // match against data
+              default:
+                return defaultPreprocessor()(column);
+            }
+          },
+          conditionMapper: (column, condition, defaultValue) => {
+            if (column === 'lastBuyBlockNumber' && condition === EQ) {
+              return '@> ?';
+            }
+            return defaultValue;
+          },
+        },
+      );
+
+      expect(query._statements[0].value.sql).toEqual('data @> ?');
+      expect(query._statements[0].value.bindings).toEqual([{ lastBuyBlockNumber: BLOCK_NUMBER }]);
+
+      const result = await query;
+      
+      expect(parseInt(result[0].data.lastBuyBlockNumber, 10)).toEqual(BLOCK_NUMBER);
     });
   });
 });

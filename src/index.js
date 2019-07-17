@@ -90,7 +90,7 @@ export const splitColumnAndCondition = (filterQS) => {
   return { column, condition };
 };
 
-const processFilter = (filterQS, castFn, preprocessor) => {
+const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
   const { column, condition } = splitColumnAndCondition(filterQS);
 
   const preprocessed = preprocessor(column);
@@ -105,7 +105,13 @@ const processFilter = (filterQS, castFn, preprocessor) => {
     if (cast) query = `(${preprocessed})::${cast}`;
   }
 
-  const currCondition = conditionMap[condition];
+  let currCondition = conditionMap[condition];
+  if (conditionMapper) {
+    const mappedCondition = conditionMapper(column, condition, currCondition);
+    if (mappedCondition) {
+      currCondition = mappedCondition;
+    }
+  }
   if (currCondition.includes('??')) {
     return currCondition.replace('??', query);
   }
@@ -116,13 +122,13 @@ const processFilter = (filterQS, castFn, preprocessor) => {
 
 export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
   const {
-    castFn, preprocessor = defaultPreprocessor(), isAggregateFn, caseInsensitiveSearch = false,
+    castFn, preprocessor = defaultPreprocessor(), isAggregateFn, caseInsensitiveSearch = false, conditionMapper,
   } = opts;
 
   let result = originalQuery;
 
   Object.keys(where).forEach((key) => {
-    let query = processFilter(key, castFn, preprocessor);
+    let query = processFilter(key, castFn, preprocessor, conditionMapper);
     const { column, condition } = splitColumnAndCondition(key);
     let queryFn = 'whereRaw';
     if (isAggregateFn) {
