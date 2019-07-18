@@ -243,6 +243,21 @@ describe('knex-flex-filter', () => {
       expect(parseInt(result[0].ownerId, 10)).toBeGreaterThan(2);
       done();
     });
+
+    it('correctly filters using or_ query type', async () => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        {
+          ownerId_eq: 1,
+          or_name_contains: 'Peter Jackson',
+        },
+        { castFn },
+      );
+
+      const result = await query;
+      expect(parseInt(result[0].ownerId, 10)).toEqual(1);
+      expect(result[1].name).toEqual('Peter Jackson');
+    });
   });
 
   describe('when filtering an aggregate column', () => {

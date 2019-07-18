@@ -13,6 +13,8 @@ export const NOT_STARTS_WITH = 'not_starts_with';
 export const ENDS_WITH = 'ends_with';
 export const NOT_ENDS_WITH = 'not_ends_with';
 export const SIMILAR_TO = 'similar_to';
+export const OR_QUERY = 'or_';
+export const AND_QUERY = 'and_';
 
 export const filterArray = [
   EQ,
@@ -32,6 +34,8 @@ export const filterArray = [
   LTE,
 ];
 
+export const queryTypesArray = [OR_QUERY, AND_QUERY];
+
 const conditionMap = {
   [EQ]: '= ?',
   [GT]: '> ?',
@@ -48,6 +52,11 @@ const conditionMap = {
   [NOT]: '<> ?',
   [GTE]: '>= ?',
   [LTE]: '<= ?',
+};
+
+const queryTypeFnMap = {
+  [AND_QUERY]: 'whereRaw',
+  [OR_QUERY]: 'orWhereRaw',
 };
 
 export const dbTypes = [
@@ -89,6 +98,9 @@ export const defaultPreprocessor = () => filterKey => `"${sanitize(filterKey)}"`
 export const jsonbPreprocessor = jsonbColumn => filterKey => `${sanitize(jsonbColumn)}->>'${sanitize(filterKey)}'`;
 
 export const splitColumnAndCondition = (filterQS) => {
+  // search for pre conditions
+  const preCondition = queryTypesArray.find(pre => filterQS.startsWith(pre));
+
   // Search for the current filter
   const condition = filterArray.find(filter => filterQS.endsWith(filter));
 
@@ -97,9 +109,10 @@ export const splitColumnAndCondition = (filterQS) => {
   }
 
   // column is going to be the actual column we are filtering on
-  const column = filterQS.substring(0, filterQS.indexOf(condition) - 1);
+  const colStartIndex = (preCondition) ? preCondition.length : 0;
+  const column = filterQS.substring(colStartIndex, filterQS.indexOf(condition) - 1);
 
-  return { column, condition };
+  return { column, condition, preCondition: preCondition || AND_QUERY };
 };
 
 const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
@@ -117,7 +130,7 @@ const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
     if (cast) query = `(${preprocessed})::${cast}`;
   }
 
-  let currCondition = getCondition(conditionMapper, column, condition);
+  const currCondition = getCondition(conditionMapper, column, condition);
   if (currCondition.includes('??')) {
     return currCondition.replace('??', query);
   }
@@ -128,15 +141,19 @@ const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
 
 export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
   const {
-    castFn, preprocessor = defaultPreprocessor(), isAggregateFn, caseInsensitiveSearch = false, conditionMapper,
+    castFn,
+    preprocessor = defaultPreprocessor(),
+    isAggregateFn,
+    caseInsensitiveSearch = false,
+    conditionMapper,
   } = opts;
 
   let result = originalQuery;
 
   Object.keys(where).forEach((key) => {
     let query = processFilter(key, castFn, preprocessor, conditionMapper);
-    const { column, condition } = splitColumnAndCondition(key);
-    let queryFn = 'whereRaw';
+    const { column, condition, preCondition } = splitColumnAndCondition(key);
+    let queryFn = queryTypeFnMap[preCondition];
     if (isAggregateFn) {
       if (isAggregateFn(column)) {
         queryFn = 'havingRaw';
