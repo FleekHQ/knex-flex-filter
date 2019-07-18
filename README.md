@@ -61,6 +61,8 @@ Current available filters are:
   <columnName>_similar_to: String is similar to
 ```
 
+By default filters are combined with an `AND` clause, if you want to perform an `OR` filtering on some column, prefix the filter with `or_`. For example `or_<columnName>_eq` would combine this column with other filters using the `OR` clause.
+
 ### Note
 
 `similar_to` filter requires Postgres `pg_trgm` extension. A migration that creates the extension and creates a GIN index for faster "similar to" queries can look like this:
@@ -187,6 +189,8 @@ const opts = {
 
 knexFlexFilter(baseQuery, where, opts).then(console.log);
 ```
+### overrideQueryFn
+A function that should return a text containing the name
 
 ## Contributing
 

@@ -99,7 +99,7 @@ export const jsonbPreprocessor = jsonbColumn => filterKey => `${sanitize(jsonbCo
 
 export const splitColumnAndCondition = (filterQS) => {
   // search for pre conditions
-  const preCondition = queryTypesArray.find(pre => filterQS.startsWith(pre));
+  const queryType = queryTypesArray.find(pre => filterQS.startsWith(pre));
 
   // Search for the current filter
   const condition = filterArray.find(filter => filterQS.endsWith(filter));
@@ -109,10 +109,10 @@ export const splitColumnAndCondition = (filterQS) => {
   }
 
   // column is going to be the actual column we are filtering on
-  const colStartIndex = (preCondition) ? preCondition.length : 0;
+  const colStartIndex = (queryType) ? queryType.length : 0;
   const column = filterQS.substring(colStartIndex, filterQS.indexOf(condition) - 1);
 
-  return { column, condition, preCondition: preCondition || AND_QUERY };
+  return { column, condition, queryType: queryType || AND_QUERY };
 };
 
 const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
@@ -152,8 +152,8 @@ export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
 
   Object.keys(where).forEach((key) => {
     let query = processFilter(key, castFn, preprocessor, conditionMapper);
-    const { column, condition, preCondition } = splitColumnAndCondition(key);
-    let queryFn = queryTypeFnMap[preCondition];
+    const { column, condition, queryType } = splitColumnAndCondition(key);
+    let queryFn = queryTypeFnMap[queryType];
     if (isAggregateFn) {
       if (isAggregateFn(column)) {
         queryFn = 'havingRaw';

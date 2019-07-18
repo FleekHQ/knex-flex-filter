@@ -253,6 +253,13 @@ describe('knex-flex-filter', () => {
         },
         { castFn },
       );
+      
+      expect(query._statements[0].value.sql).toEqual('("ownerId")::bigint = ?');
+      expect(query._statements[0].value.bindings).toEqual([1]);
+      expect(query._statements[0].bool).toEqual('and');
+      expect(query._statements[1].value.sql).toEqual('"name" LIKE ?');
+      expect(query._statements[1].value.bindings).toEqual(['%Peter Jackson%']);
+      expect(query._statements[1].bool).toEqual('or');
 
       const result = await query;
       expect(parseInt(result[0].ownerId, 10)).toEqual(1);
