@@ -211,7 +211,7 @@ knexFlexFilter(baseQuery, where, opts).then(console.log);
 
 This should only be used as a last resort for modification of the query.
 It is useful to override/bypass the internal logic for handling query conditions for a column and filter.
-It is an object who's keys should correspond to the column name you want to override its queyr.
+It is an object who's keys should correspond to the column name you want to override its query.
 
 For example, let's say we want to filter on a JSONB column named `meta` to not contain 
 a object. Currently, the library handles not filters using `<>` and this is not always ideal. Code:
