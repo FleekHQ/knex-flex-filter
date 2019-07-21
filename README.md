@@ -61,7 +61,24 @@ Current available filters are:
   <columnName>_similar_to: String is similar to
 ```
 
-By default filters are combined with an `AND` clause, if you want to perform an `OR` filtering on some column, prefix the filter with `or_`. For example `or_<columnName>_eq` would combine this column with other filters using the `OR` clause.
+By default filters are combined with an `AND` clause, if you want to perform an `OR` filtering on some column, you would need to use the `OR` group filtering.
+
+## Group filters
+Group filtering allows for grouping of filters in AND and OR logics using an array of filters. For example, let say we want to filter on a query like `age = 10 AND (height > 5 or weight > 10)`, then your filter object would look like this:
+
+```javascript
+{
+  height_eq: 5,
+  OR: [
+    {
+      height_gt: 5
+    },
+    {
+      weight_gt: 10
+    }
+  ] 
+}
+```
 
 ### Note
 
@@ -189,8 +206,6 @@ const opts = {
 
 knexFlexFilter(baseQuery, where, opts).then(console.log);
 ```
-### overrideQueryFn
-A function that should return a text containing the name
 
 ## Contributing
 
