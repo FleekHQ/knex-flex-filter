@@ -244,32 +244,33 @@ describe('knex-flex-filter', () => {
       done();
     });
 
-    it('correctly filters using OR query type', async () => {
+    it('correctly filters using AND and OR query group', async () => {
       const query = knexFlexFilter(
         knex.table('entities'),
         {
-          ownerId_eq: 1,
+          ownerId_eq: 2,
           OR: [
             {
               name_contains: 'Peter Jackson',
+            },
+            {
+              name_contains: 'John Doe',
             },
           ],
         },
         { castFn },
       );
-      
-      expect(query._statements[0].value.sql).toEqual('("ownerId")::bigint = ?');
-      expect(query._statements[0].value.bindings).toEqual([1]);
-      expect(query._statements[0].bool).toEqual('and');
-      expect(query._statements[1].bool).toEqual('or');
-      expect(query._statements[1].type).toEqual('whereWrapped');
+
+      expect(query.toString()).toEqual(
+        `select * from "entities" where ("ownerId")::bigint = 2 and (("name" LIKE '%Peter Jackson%') or ("name" LIKE '%John Doe%'))`
+      );
 
       const result = await query;
-      expect(parseInt(result[0].ownerId, 10)).toEqual(1);
-      expect(result[1].name).toEqual('Peter Jackson');
+      expect(parseInt(result[0].ownerId, 10)).toEqual(2);
+      expect(result[0].name).toEqual('Peter Jackson');
     });
 
-    it('correctly filters using AND query type', async () => {
+    it('correctly filters using AND and OR top level query group', async () => {
       const query = knexFlexFilter(
         knex.table('entities'),
         {
@@ -282,6 +283,9 @@ describe('knex-flex-filter', () => {
                 {
                   name_contains: 'Peter Jackson',
                 },
+                {
+                  name_contains: 'John Doe',
+                },
               ],
             },
           ],
@@ -289,10 +293,36 @@ describe('knex-flex-filter', () => {
         { castFn },
       );
 
-      expect(query._statements[0].bool).toEqual('and');
-      expect(query._statements[0].type).toEqual('whereWrapped');
-
+      expect(query.toString()).toEqual(
+        `select * from "entities" where ((("ownerId")::bigint = 1) and ((("name" LIKE '%Peter Jackson%') or ("name" LIKE '%John Doe%'))))`
+      );
       const result = await query;
+
+      expect(parseInt(result[0].ownerId, 10)).toEqual(1);
+      expect(result[0].name).toEqual('John Doe');
+    });
+
+    it('correctly filters using OR as top level query group', async () => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        {
+          OR: [
+            {
+              ownerId_eq: 1,
+            },
+            {
+              name_contains: 'Peter Jackson',
+            },
+          ],
+        },
+        { castFn },
+      );
+
+      expect(query.toString()).toEqual(
+        `select * from "entities" where ((("ownerId")::bigint = 1) or ("name" LIKE '%Peter Jackson%'))`
+      );
+      const result = await query;
+
       expect(parseInt(result[0].ownerId, 10)).toEqual(1);
       expect(result[1].name).toEqual('Peter Jackson');
     });
@@ -310,32 +340,6 @@ describe('knex-flex-filter', () => {
           { castFn },
         );
       }).toThrow();
-    });
-
-    it('correctly filters groups and object in the proper order', async () => {
-      // it should evaluate groups after all other keys have been handled.
-      const query = knexFlexFilter(
-        knex.table('entities'),
-        {
-          OR: [
-            {
-              name_contains: 'Peter Jackson',
-            },
-          ],
-          ownerId_eq: 1,
-        },
-        { castFn },
-      );
-      
-      expect(query._statements[0].value.sql).toEqual('("ownerId")::bigint = ?');
-      expect(query._statements[0].value.bindings).toEqual([1]);
-      expect(query._statements[0].bool).toEqual('and');
-      expect(query._statements[1].bool).toEqual('or');
-      expect(query._statements[1].type).toEqual('whereWrapped');
-
-      const result = await query;
-      expect(parseInt(result[0].ownerId, 10)).toEqual(1);
-      expect(result[1].name).toEqual('Peter Jackson');
     });
   });
 

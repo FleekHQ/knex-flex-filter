@@ -1,3 +1,4 @@
+/* eslint-disable no-use-before-define */
 export const EQ = 'eq';
 export const GT = 'gt';
 export const LT = 'lt';
@@ -34,6 +35,7 @@ export const filterArray = [
   LTE,
 ];
 
+// NOTE: this should be in order of decreasing precedence
 export const groupOperatorArray = [AND_OP, OR_OP];
 
 const conditionMap = {
@@ -55,7 +57,7 @@ const conditionMap = {
 };
 
 const groupOperatorFnMap = {
-  [AND_OP]: 'where',
+  [AND_OP]: 'andWhere',
   [OR_OP]: 'orWhere',
 };
 
@@ -135,16 +137,21 @@ const processFilter = (column, condition, castFn, preprocessor, conditionMapper)
 // handles OR and AND group filters. Recursively calls parseFilter for children
 const parseGroupFilter = (filter, key, baseQuery, opts) => {
   const filterGroup = filter[key];
-  if (!Array.isArray(filterGroup)) {
-    throw new Error(`${key} filter group must be an array. Got ${filterGroup}`);
+  if (!Array.isArray(filterGroup) || filterGroup.length === 0) {
+    throw new Error(`${key} filter group must be a non-empty array. Got ${filterGroup}`);
   }
-  baseQuery[groupOperatorFnMap[key]]((subQueryBuilder) => {
-    filterGroup.forEach((subFilter) => {
-      // eslint-disable-next-line no-use-before-define, no-param-reassign
-      baseQuery = parseFilter(subQueryBuilder, subFilter, opts);
+
+  const groupQueryFn = groupOperatorFnMap[key];
+
+  const updatedQuery = baseQuery.where((subQuery) => {
+    filterGroup.forEach((nextFilterObject) => {
+      subQuery[groupQueryFn]((subQueryBuilder) => {
+        parseFilter(subQueryBuilder, nextFilterObject, opts);
+      });
     });
   });
-  return baseQuery;
+
+  return updatedQuery;
 };
 
 const parseObjectFilter = (filter, key, baseQuery, opts) => {
@@ -192,15 +199,15 @@ const parseObjectFilter = (filter, key, baseQuery, opts) => {
 
 const parseFilter = (originalQuery, filter, opts) => {
   let baseQuery = originalQuery;
-  Object.keys(filter).forEach((key) => {
-    if (groupOperatorFnMap[key]) {
-      // skip group filters until later
-      return;
-    }
+  const filterObjectKey = Object.keys(filter)
+    .filter(key => !groupOperatorArray.includes(key));
+
+  // we build query for all none group filters first.
+  filterObjectKey.forEach((key) => {
     baseQuery = parseObjectFilter(filter, key, baseQuery, opts);
   });
 
-  // handle all group filter if any
+  // then handle all group filters (if any)
   groupOperatorArray.forEach((groupOperator) => {
     if (filter[groupOperator]) {
       baseQuery = parseGroupFilter(filter, groupOperator, baseQuery, opts);
