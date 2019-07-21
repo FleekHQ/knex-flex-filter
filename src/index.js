@@ -13,8 +13,8 @@ export const NOT_STARTS_WITH = 'not_starts_with';
 export const ENDS_WITH = 'ends_with';
 export const NOT_ENDS_WITH = 'not_ends_with';
 export const SIMILAR_TO = 'similar_to';
-export const OR_QUERY = 'or_';
-export const AND_QUERY = 'and_';
+export const OR_OP = 'OR';
+export const AND_OP = 'AND';
 
 export const filterArray = [
   EQ,
@@ -34,7 +34,7 @@ export const filterArray = [
   LTE,
 ];
 
-export const queryTypesArray = [OR_QUERY, AND_QUERY];
+export const groupOperatorArray = [OR_OP, AND_OP];
 
 const conditionMap = {
   [EQ]: '= ?',
@@ -54,9 +54,9 @@ const conditionMap = {
   [LTE]: '<= ?',
 };
 
-const queryTypeFnMap = {
-  [AND_QUERY]: 'whereRaw',
-  [OR_QUERY]: 'orWhereRaw',
+const groupOperatorFnMap = {
+  [AND_OP]: 'where',
+  [OR_OP]: 'orWhere',
 };
 
 export const dbTypes = [
@@ -98,9 +98,6 @@ export const defaultPreprocessor = () => filterKey => `"${sanitize(filterKey)}"`
 export const jsonbPreprocessor = jsonbColumn => filterKey => `${sanitize(jsonbColumn)}->>'${sanitize(filterKey)}'`;
 
 export const splitColumnAndCondition = (filterQS) => {
-  // search for pre conditions
-  const queryType = queryTypesArray.find(pre => filterQS.startsWith(pre));
-
   // Search for the current filter
   const condition = filterArray.find(filter => filterQS.endsWith(filter));
 
@@ -109,10 +106,9 @@ export const splitColumnAndCondition = (filterQS) => {
   }
 
   // column is going to be the actual column we are filtering on
-  const colStartIndex = (queryType) ? queryType.length : 0;
-  const column = filterQS.substring(colStartIndex, filterQS.indexOf(condition) - 1);
+  const column = filterQS.substring(0, filterQS.indexOf(condition) - 1);
 
-  return { column, condition, queryType: queryType || AND_QUERY };
+  return { column, condition };
 };
 
 const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
@@ -138,6 +134,75 @@ const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
   return `${query} ${currCondition}`;
 };
 
+// handles OR and AND group filters. Recursively calls parseFilter for children
+const parseGroupFilter = (filter, key, baseQuery, opts) => {
+  const filterGroup = filter[key];
+  if (!Array.isArray(filterGroup)) {
+    throw new Error(`${key} filter group must be an array. Got ${filterGroup}`);
+  }
+  baseQuery[groupOperatorFnMap[key]]((subQueryBuilder) => {
+    filterGroup.forEach((subFilter) => {
+      // eslint-disable-next-line no-use-before-define, no-param-reassign
+      baseQuery = parseFilter(subQueryBuilder, subFilter, opts);
+    });
+  });
+  return baseQuery;
+};
+
+const parseObjectFilter = (filter, key, baseQuery, opts) => {
+  const {
+    castFn,
+    preprocessor,
+    conditionMapper,
+    isAggregateFn,
+    caseInsensitiveSearch,
+  } = opts;
+
+  let query = processFilter(key, castFn, preprocessor, conditionMapper);
+  const { column, condition } = splitColumnAndCondition(key);
+  let queryFn = 'whereRaw';
+  if (isAggregateFn) {
+    if (isAggregateFn(column)) {
+      queryFn = 'havingRaw';
+    }
+  }
+  let value = filter[key];
+
+  // Escape apostrophes correctly
+  const matchEscape = getCondition(conditionMapper, column, condition).match(/'(.*)\?(.*)'/);
+  if (matchEscape) {
+    // eslint-disable-next-line no-unused-vars
+    const [_, pre, post] = matchEscape;
+    value = `${pre}${value}${post}`;
+    query = query.replace(/(.*)'.*\?.*'(.*)/, '$1?$2');
+  }
+
+  if (caseInsensitiveSearch) {
+    query = query.replace('LIKE', 'ILIKE');
+  }
+  return baseQuery[queryFn](query, [value]);
+};
+
+const parseFilter = (originalQuery, filter, opts) => {
+  let baseQuery = originalQuery;
+  Object.keys(filter).forEach((key) => {
+    if (groupOperatorFnMap[key]) {
+      // skip group filters until later
+      return;
+    }
+    baseQuery = parseObjectFilter(filter, key, baseQuery, opts);
+  });
+
+  // handle all group filter if any
+  groupOperatorArray.forEach((groupOperator) => {
+    if (filter[groupOperator]) {
+      baseQuery = parseGroupFilter(filter, groupOperator, baseQuery, opts);
+    }
+  });
+
+  return baseQuery;
+};
+
 
 export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
   const {
@@ -148,36 +213,13 @@ export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
     conditionMapper,
   } = opts;
 
-  let result = originalQuery;
-
-  Object.keys(where).forEach((key) => {
-    let query = processFilter(key, castFn, preprocessor, conditionMapper);
-    const { column, condition, queryType } = splitColumnAndCondition(key);
-    let queryFn = queryTypeFnMap[queryType];
-    if (isAggregateFn) {
-      if (isAggregateFn(column)) {
-        queryFn = 'havingRaw';
-      }
-    }
-    let value = where[key];
-
-    // Escape apostrophes correctly
-    const matchEscape = getCondition(conditionMapper, column, condition).match(/'(.*)\?(.*)'/);
-    if (matchEscape) {
-      // eslint-disable-next-line no-unused-vars
-      const [_, pre, post] = matchEscape;
-      value = `${pre}${value}${post}`;
-      query = query.replace(/(.*)'.*\?.*'(.*)/, '$1?$2');
-    }
-
-    if (caseInsensitiveSearch) {
-      query = query.replace('LIKE', 'ILIKE');
-    }
-
-    result = result[queryFn](query, [value]);
+  return parseFilter(originalQuery, where, {
+    castFn,
+    preprocessor,
+    isAggregateFn,
+    caseInsensitiveSearch,
+    conditionMapper,
   });
-
-  return result;
 };
 
 export default knexFlexFilter;

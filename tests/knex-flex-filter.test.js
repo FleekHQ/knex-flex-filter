@@ -244,12 +244,16 @@ describe('knex-flex-filter', () => {
       done();
     });
 
-    it('correctly filters using or_ query type', async () => {
+    it('correctly filters using OR query type', async () => {
       const query = knexFlexFilter(
         knex.table('entities'),
         {
           ownerId_eq: 1,
-          or_name_contains: 'Peter Jackson',
+          OR: [
+            {
+              name_contains: 'Peter Jackson',
+            },
+          ],
         },
         { castFn },
       );
@@ -257,9 +261,77 @@ describe('knex-flex-filter', () => {
       expect(query._statements[0].value.sql).toEqual('("ownerId")::bigint = ?');
       expect(query._statements[0].value.bindings).toEqual([1]);
       expect(query._statements[0].bool).toEqual('and');
-      expect(query._statements[1].value.sql).toEqual('"name" LIKE ?');
-      expect(query._statements[1].value.bindings).toEqual(['%Peter Jackson%']);
       expect(query._statements[1].bool).toEqual('or');
+      expect(query._statements[1].type).toEqual('whereWrapped');
+
+      const result = await query;
+      expect(parseInt(result[0].ownerId, 10)).toEqual(1);
+      expect(result[1].name).toEqual('Peter Jackson');
+    });
+
+    it('correctly filters using AND query type', async () => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        {
+          AND: [
+            {
+              ownerId_eq: 1,
+            },
+            {
+              OR: [
+                {
+                  name_contains: 'Peter Jackson',
+                },
+              ],
+            },
+          ],
+        },
+        { castFn },
+      );
+
+      expect(query._statements[0].bool).toEqual('and');
+      expect(query._statements[0].type).toEqual('whereWrapped');
+
+      const result = await query;
+      expect(parseInt(result[0].ownerId, 10)).toEqual(1);
+      expect(result[1].name).toEqual('Peter Jackson');
+    });
+
+    it('should throw if filter group is not an array', () => {
+      expect(() => {
+        knexFlexFilter(
+          knex.table('entities'),
+          {
+            OR: {
+              ownerId_eq: 1,
+              name_contains: 'Peter Jackson',
+            },
+          },
+          { castFn },
+        );
+      }).toThrow();
+    });
+
+    it('correctly filters groups and object in the proper order', async () => {
+      // it should evaluate groups after all other keys have been handled.
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        {
+          OR: [
+            {
+              name_contains: 'Peter Jackson',
+            },
+          ],
+          ownerId_eq: 1,
+        },
+        { castFn },
+      );
+      
+      expect(query._statements[0].value.sql).toEqual('("ownerId")::bigint = ?');
+      expect(query._statements[0].value.bindings).toEqual([1]);
+      expect(query._statements[0].bool).toEqual('and');
+      expect(query._statements[1].bool).toEqual('or');
+      expect(query._statements[1].type).toEqual('whereWrapped');
 
       const result = await query;
       expect(parseInt(result[0].ownerId, 10)).toEqual(1);
