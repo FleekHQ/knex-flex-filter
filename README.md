@@ -61,6 +61,25 @@ Current available filters are:
   <columnName>_similar_to: String is similar to
 ```
 
+By default filters are combined with an `AND` clause, if you want to perform an `OR` filtering on some column, you would need to use the `OR` group filtering.
+
+## Group filters
+Group filtering allows for grouping of filters in AND and OR logics using an array of filters. For example, let say we want to filter on a query like `age = 10 AND (height > 5 or weight > 10)`, then your filter object would look like this:
+
+```javascript
+{
+  height_eq: 5,
+  OR: [
+    {
+      height_gt: 5
+    },
+    {
+      weight_gt: 10
+    }
+  ] 
+}
+```
+
 ### Note
 
 `similar_to` filter requires Postgres `pg_trgm` extension. A migration that creates the extension and creates a GIN index for faster "similar to" queries can look like this:
@@ -182,6 +201,35 @@ const opts = {
     }
 
     return defaultValue;
+  }
+}
+
+knexFlexFilter(baseQuery, where, opts).then(console.log);
+```
+
+### columnQueryOverrides
+
+This should only be used as a last resort for modification of the query.
+It is useful to override/bypass the internal logic for handling query conditions for a column and filter.
+It is an object who's keys should correspond to the column name you want to override its query.
+
+For example, let's say we want to filter on a JSONB column named `meta` to not contain 
+a object. Currently, the library handles not filters using `<>` and this is not always ideal. Code:
+
+```javascript
+import { knexFlexFilter, NOT } from 'knex-flex-filter';
+...
+
+const opts = {
+  columnQueryOverrides: {
+    meta: (baseQuery, column, condition, value) => {
+    if (condition !== NOT) {
+      // return falsy to bypass this override and use normal library logic
+      return false; 
+    }
+
+    // now we can do proper NOT contains query on the meta column
+    return baseQuery.whereNot(column, '@>', value);
   }
 }
 

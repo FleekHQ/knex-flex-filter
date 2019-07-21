@@ -1,7 +1,7 @@
 
 import seedsFn from './helpers/seeds';
 import knex from './knex';
-import knexFlexFilter, { jsonbPreprocessor, defaultPreprocessor, EQ } from '../src';
+import knexFlexFilter, { jsonbPreprocessor, defaultPreprocessor, EQ, NOT } from '../src';
 
 require('./helpers/database');
 
@@ -242,6 +242,104 @@ describe('knex-flex-filter', () => {
       expect([1]).not.toContain(parseInt(result[0].ownerId, 10));
       expect(parseInt(result[0].ownerId, 10)).toBeGreaterThan(2);
       done();
+    });
+
+    it('correctly filters using AND and OR query group', async () => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        {
+          ownerId_eq: 2,
+          OR: [
+            {
+              name_contains: 'Peter Jackson',
+            },
+            {
+              name_contains: 'John Doe',
+            },
+          ],
+        },
+        { castFn },
+      );
+
+      expect(query.toString()).toEqual(
+        `select * from "entities" where ("ownerId")::bigint = 2 and (("name" LIKE '%Peter Jackson%') or ("name" LIKE '%John Doe%'))`
+      );
+
+      const result = await query;
+      expect(parseInt(result[0].ownerId, 10)).toEqual(2);
+      expect(result[0].name).toEqual('Peter Jackson');
+    });
+
+    it('correctly filters using AND and OR top level query group', async () => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        {
+          AND: [
+            {
+              ownerId_eq: 1,
+            },
+            {
+              OR: [
+                {
+                  name_contains: 'Peter Jackson',
+                },
+                {
+                  name_contains: 'John Doe',
+                },
+              ],
+            },
+          ],
+        },
+        { castFn },
+      );
+
+      expect(query.toString()).toEqual(
+        `select * from "entities" where ((("ownerId")::bigint = 1) and ((("name" LIKE '%Peter Jackson%') or ("name" LIKE '%John Doe%'))))`
+      );
+      const result = await query;
+
+      expect(parseInt(result[0].ownerId, 10)).toEqual(1);
+      expect(result[0].name).toEqual('John Doe');
+    });
+
+    it('correctly filters using OR as top level query group', async () => {
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        {
+          OR: [
+            {
+              ownerId_eq: 1,
+            },
+            {
+              name_contains: 'Peter Jackson',
+            },
+          ],
+        },
+        { castFn },
+      );
+
+      expect(query.toString()).toEqual(
+        `select * from "entities" where ((("ownerId")::bigint = 1) or ("name" LIKE '%Peter Jackson%'))`
+      );
+      const result = await query;
+
+      expect(parseInt(result[0].ownerId, 10)).toEqual(1);
+      expect(result[1].name).toEqual('Peter Jackson');
+    });
+
+    it('should throw if filter group is not an array', () => {
+      expect(() => {
+        knexFlexFilter(
+          knex.table('entities'),
+          {
+            OR: {
+              ownerId_eq: 1,
+              name_contains: 'Peter Jackson',
+            },
+          },
+          { castFn },
+        );
+      }).toThrow();
     });
   });
 
@@ -663,6 +761,50 @@ describe('knex-flex-filter', () => {
       const result = await query;
       
       expect(parseInt(result[0].data.lastBuyBlockNumber, 10)).toEqual(BLOCK_NUMBER);
+    });
+  });
+
+  describe('when filtering with column query overrides', () => {
+    it('should use overrriden query', async () => {
+      const columnQueryOverrides = {
+        ownerId: (baseQuery, column, condition, value) => {
+          expect(column).toEqual('ownerId');
+          expect(condition).toEqual(NOT);
+          expect(value).toEqual(2);
+          return baseQuery.whereRaw('("ownerId")::bigint != ?', [value]);
+        },
+      };
+
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { ownerId_not: 2 },
+        { castFn, columnQueryOverrides },
+      );
+
+      expect(query._statements[0].value.sql).toEqual('("ownerId")::bigint != ?');
+      expect(query._statements[0].value.bindings).toEqual([2]);
+
+      const result = await query;
+      expect(result.map(_schema => parseInt(_schema.ownerId, 10))).not.toContain(2);
+    });
+
+    it('should ignore overriden query result if falsy', async () => {
+      const columnQueryOverrides = {
+        // returning null for override should bypass override
+        ownerId: () => null,
+      };
+
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { ownerId_not: 2 },
+        { castFn, columnQueryOverrides },
+      );
+
+      expect(query._statements[0].value.sql).toEqual('("ownerId")::bigint <> ?');
+      expect(query._statements[0].value.bindings).toEqual([2]);
+
+      const result = await query;
+      expect(result.map(_schema => parseInt(_schema.ownerId, 10))).not.toContain(2);
     });
   });
 });

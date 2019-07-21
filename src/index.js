@@ -1,3 +1,4 @@
+/* eslint-disable no-use-before-define */
 export const EQ = 'eq';
 export const GT = 'gt';
 export const LT = 'lt';
@@ -13,6 +14,8 @@ export const NOT_STARTS_WITH = 'not_starts_with';
 export const ENDS_WITH = 'ends_with';
 export const NOT_ENDS_WITH = 'not_ends_with';
 export const SIMILAR_TO = 'similar_to';
+export const OR_OP = 'OR';
+export const AND_OP = 'AND';
 
 export const filterArray = [
   EQ,
@@ -32,6 +35,9 @@ export const filterArray = [
   LTE,
 ];
 
+// NOTE: this should be in order of decreasing precedence
+export const groupOperatorArray = [AND_OP, OR_OP];
+
 const conditionMap = {
   [EQ]: '= ?',
   [GT]: '> ?',
@@ -48,6 +54,11 @@ const conditionMap = {
   [NOT]: '<> ?',
   [GTE]: '>= ?',
   [LTE]: '<= ?',
+};
+
+const groupOperatorFnMap = {
+  [AND_OP]: 'andWhere',
+  [OR_OP]: 'orWhere',
 };
 
 export const dbTypes = [
@@ -102,9 +113,7 @@ export const splitColumnAndCondition = (filterQS) => {
   return { column, condition };
 };
 
-const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
-  const { column, condition } = splitColumnAndCondition(filterQS);
-
+const processFilter = (column, condition, castFn, preprocessor, conditionMapper) => {
   const preprocessed = preprocessor(column);
   let query = preprocessed;
 
@@ -117,7 +126,7 @@ const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
     if (cast) query = `(${preprocessed})::${cast}`;
   }
 
-  let currCondition = getCondition(conditionMapper, column, condition);
+  const currCondition = getCondition(conditionMapper, column, condition);
   if (currCondition.includes('??')) {
     return currCondition.replace('??', query);
   }
@@ -125,42 +134,108 @@ const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
   return `${query} ${currCondition}`;
 };
 
+// handles OR and AND group filters. Recursively calls parseFilter for children
+const parseGroupFilter = (filter, key, baseQuery, opts) => {
+  const filterGroup = filter[key];
+  if (!Array.isArray(filterGroup) || filterGroup.length === 0) {
+    throw new Error(`${key} filter group must be a non-empty array. Got ${filterGroup}`);
+  }
+
+  const groupQueryFn = groupOperatorFnMap[key];
+
+  const updatedQuery = baseQuery.where((subQuery) => {
+    filterGroup.forEach((nextFilterObject) => {
+      subQuery[groupQueryFn]((subQueryBuilder) => {
+        parseFilter(subQueryBuilder, nextFilterObject, opts);
+      });
+    });
+  });
+
+  return updatedQuery;
+};
+
+const parseObjectFilter = (filter, key, baseQuery, opts) => {
+  const {
+    castFn,
+    preprocessor,
+    conditionMapper,
+    isAggregateFn,
+    caseInsensitiveSearch,
+    columnQueryOverrides,
+  } = opts;
+
+  const { column, condition } = splitColumnAndCondition(key);
+  let value = filter[key];
+
+  if (columnQueryOverrides[column]) {
+    const overridenQuery = columnQueryOverrides[column](baseQuery, column, condition, value);
+    if (overridenQuery) {
+      return overridenQuery;
+    }
+  }
+
+  let query = processFilter(column, condition, castFn, preprocessor, conditionMapper);
+  let queryFn = 'whereRaw';
+  if (isAggregateFn) {
+    if (isAggregateFn(column)) {
+      queryFn = 'havingRaw';
+    }
+  }
+
+  // Escape apostrophes correctly
+  const matchEscape = getCondition(conditionMapper, column, condition).match(/'(.*)\?(.*)'/);
+  if (matchEscape) {
+    // eslint-disable-next-line no-unused-vars
+    const [_, pre, post] = matchEscape;
+    value = `${pre}${value}${post}`;
+    query = query.replace(/(.*)'.*\?.*'(.*)/, '$1?$2');
+  }
+
+  if (caseInsensitiveSearch) {
+    query = query.replace('LIKE', 'ILIKE');
+  }
+  return baseQuery[queryFn](query, [value]);
+};
+
+const parseFilter = (originalQuery, filter, opts) => {
+  let baseQuery = originalQuery;
+  const filterObjectKey = Object.keys(filter)
+    .filter(key => !groupOperatorArray.includes(key));
+
+  // we build query for all none group filters first.
+  filterObjectKey.forEach((key) => {
+    baseQuery = parseObjectFilter(filter, key, baseQuery, opts);
+  });
+
+  // then handle all group filters (if any)
+  groupOperatorArray.forEach((groupOperator) => {
+    if (filter[groupOperator]) {
+      baseQuery = parseGroupFilter(filter, groupOperator, baseQuery, opts);
+    }
+  });
+
+  return baseQuery;
+};
+
 
 export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
   const {
-    castFn, preprocessor = defaultPreprocessor(), isAggregateFn, caseInsensitiveSearch = false, conditionMapper,
+    castFn,
+    preprocessor = defaultPreprocessor(),
+    isAggregateFn,
+    caseInsensitiveSearch = false,
+    conditionMapper,
+    columnQueryOverrides = {},
   } = opts;
 
-  let result = originalQuery;
-
-  Object.keys(where).forEach((key) => {
-    let query = processFilter(key, castFn, preprocessor, conditionMapper);
-    const { column, condition } = splitColumnAndCondition(key);
-    let queryFn = 'whereRaw';
-    if (isAggregateFn) {
-      if (isAggregateFn(column)) {
-        queryFn = 'havingRaw';
-      }
-    }
-    let value = where[key];
-
-    // Escape apostrophes correctly
-    const matchEscape = getCondition(conditionMapper, column, condition).match(/'(.*)\?(.*)'/);
-    if (matchEscape) {
-      // eslint-disable-next-line no-unused-vars
-      const [_, pre, post] = matchEscape;
-      value = `${pre}${value}${post}`;
-      query = query.replace(/(.*)'.*\?.*'(.*)/, '$1?$2');
-    }
-
-    if (caseInsensitiveSearch) {
-      query = query.replace('LIKE', 'ILIKE');
-    }
-
-    result = result[queryFn](query, [value]);
+  return parseFilter(originalQuery, where, {
+    castFn,
+    preprocessor,
+    isAggregateFn,
+    caseInsensitiveSearch,
+    conditionMapper,
+    columnQueryOverrides,
   });
-
-  return result;
 };
 
 export default knexFlexFilter;
