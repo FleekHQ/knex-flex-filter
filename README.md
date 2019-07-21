@@ -207,6 +207,35 @@ const opts = {
 knexFlexFilter(baseQuery, where, opts).then(console.log);
 ```
 
+### columnQueryOverrides
+
+This should only be used as a last resort for modification of the query.
+It is useful to override/bypass the internal logic for handling query conditions for a column and filter.
+It is an object who's keys should correspond to the column name you want to override its queyr.
+
+For example, let's say we want to filter on a JSONB column named `meta` to not contain 
+a object. Currently, the library handles not filters using `<>` and this is not always ideal. Code:
+
+```javascript
+import { knexFlexFilter, NOT } from 'knex-flex-filter';
+...
+
+const opts = {
+  columnQueryOverrides: {
+    meta: (baseQuery, column, condition, value) => {
+    if (condition !== NOT) {
+      // return falsy to bypass this override and use normal library logic
+      return false; 
+    }
+
+    // now we can do proper NOT contains query on the meta column
+    return baseQuery.whereNot(column, '@>', value);
+  }
+}
+
+knexFlexFilter(baseQuery, where, opts).then(console.log);
+```
+
 ## Contributing
 
 Make sure all the tests pass before sending a PR. To run the test suite, run `yarn test`. Please note that the codebase is using `dotenv` package to connect to a test db, so, to connect to your own, add a `.env` file inside the `tests` folder with the following structure:

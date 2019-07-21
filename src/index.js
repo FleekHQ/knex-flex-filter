@@ -111,9 +111,7 @@ export const splitColumnAndCondition = (filterQS) => {
   return { column, condition };
 };
 
-const processFilter = (filterQS, castFn, preprocessor, conditionMapper) => {
-  const { column, condition } = splitColumnAndCondition(filterQS);
-
+const processFilter = (column, condition, castFn, preprocessor, conditionMapper) => {
   const preprocessed = preprocessor(column);
   let query = preprocessed;
 
@@ -156,17 +154,26 @@ const parseObjectFilter = (filter, key, baseQuery, opts) => {
     conditionMapper,
     isAggregateFn,
     caseInsensitiveSearch,
+    columnQueryOverrides,
   } = opts;
 
-  let query = processFilter(key, castFn, preprocessor, conditionMapper);
   const { column, condition } = splitColumnAndCondition(key);
+  let value = filter[key];
+
+  if (columnQueryOverrides[column]) {
+    const overridenQuery = columnQueryOverrides[column](baseQuery, column, condition, value);
+    if (overridenQuery) {
+      return overridenQuery;
+    }
+  }
+
+  let query = processFilter(column, condition, castFn, preprocessor, conditionMapper);
   let queryFn = 'whereRaw';
   if (isAggregateFn) {
     if (isAggregateFn(column)) {
       queryFn = 'havingRaw';
     }
   }
-  let value = filter[key];
 
   // Escape apostrophes correctly
   const matchEscape = getCondition(conditionMapper, column, condition).match(/'(.*)\?(.*)'/);
@@ -211,6 +218,7 @@ export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
     isAggregateFn,
     caseInsensitiveSearch = false,
     conditionMapper,
+    columnQueryOverrides = {},
   } = opts;
 
   return parseFilter(originalQuery, where, {
@@ -219,6 +227,7 @@ export const knexFlexFilter = (originalQuery, where = {}, opts = {}) => {
     isAggregateFn,
     caseInsensitiveSearch,
     conditionMapper,
+    columnQueryOverrides,
   });
 };
 

@@ -1,7 +1,7 @@
 
 import seedsFn from './helpers/seeds';
 import knex from './knex';
-import knexFlexFilter, { jsonbPreprocessor, defaultPreprocessor, EQ } from '../src';
+import knexFlexFilter, { jsonbPreprocessor, defaultPreprocessor, EQ, NOT } from '../src';
 
 require('./helpers/database');
 
@@ -757,6 +757,50 @@ describe('knex-flex-filter', () => {
       const result = await query;
       
       expect(parseInt(result[0].data.lastBuyBlockNumber, 10)).toEqual(BLOCK_NUMBER);
+    });
+  });
+
+  describe('when filtering with column query overrides', () => {
+    it('should use overrriden query', async () => {
+      const columnQueryOverrides = {
+        ownerId: (baseQuery, column, condition, value) => {
+          expect(column).toEqual('ownerId');
+          expect(condition).toEqual(NOT);
+          expect(value).toEqual(2);
+          return baseQuery.whereRaw('("ownerId")::bigint != ?', [value]);
+        },
+      };
+
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { ownerId_not: 2 },
+        { castFn, columnQueryOverrides },
+      );
+
+      expect(query._statements[0].value.sql).toEqual('("ownerId")::bigint != ?');
+      expect(query._statements[0].value.bindings).toEqual([2]);
+
+      const result = await query;
+      expect(result.map(_schema => parseInt(_schema.ownerId, 10))).not.toContain(2);
+    });
+
+    it('should ignore overriden query result if falsy', async () => {
+      const columnQueryOverrides = {
+        // returning null for override should bypass override
+        ownerId: () => null,
+      };
+
+      const query = knexFlexFilter(
+        knex.table('entities'),
+        { ownerId_not: 2 },
+        { castFn, columnQueryOverrides },
+      );
+
+      expect(query._statements[0].value.sql).toEqual('("ownerId")::bigint <> ?');
+      expect(query._statements[0].value.bindings).toEqual([2]);
+
+      const result = await query;
+      expect(result.map(_schema => parseInt(_schema.ownerId, 10))).not.toContain(2);
     });
   });
 });
