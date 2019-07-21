@@ -34,7 +34,7 @@ export const filterArray = [
   LTE,
 ];
 
-export const groupOperatorArray = [OR_OP, AND_OP];
+export const groupOperatorArray = [AND_OP, OR_OP];
 
 const conditionMap = {
   [EQ]: '= ?',
